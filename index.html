@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expense Tracker - Indian Rupees with Expense Limits</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
+            min-height: 100vh; 
+        }
+        .card { 
+            background: white; 
+            border-radius: 1rem; 
+            padding: 1.5rem; 
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); 
+            margin-bottom: 1rem; 
+            transition: all 0.3s ease;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 30px -5px rgba(0,0,0,0.2);
+        }
+        .btn { 
+            padding: 0.5rem 1rem; 
+            border-radius: 0.5rem; 
+            font-weight: 600; 
+            cursor: pointer; 
+            border: none; 
+            transition: all 0.3s; 
+        }
+        .btn-primary { 
+            background: #667eea; 
+            color: white; 
+        }
+        .btn-primary:hover { 
+            background: #5a67d8; 
+            transform: translateY(-2px); 
+        }
+        .btn-danger { 
+            background: #f56565; 
+            color: white; 
+        }
+        .btn-success { 
+            background: #48bb78; 
+            color: white; 
+        }
+        .btn-warning {
+            background: #ed8936;
+            color: white;
+        }
+        .modal { 
+            position: fixed; 
+            top: 0; 
+            left: 0; 
+            right: 0; 
+            bottom: 0; 
+            background: rgba(0,0,0,0.5); 
+            display: flex; 
+            align-items: center; 
+            justify-content: center; 
+            z-index: 1000; 
+            backdrop-filter: blur(5px);
+        }
+        .modal-content { 
+            background: white; 
+            border-radius: 1rem; 
+            padding: 2rem; 
+            max-width: 500px; 
+            width: 90%; 
+            max-height: 90vh; 
+            overflow-y: auto; 
+            animation: slideIn 0.3s ease;
+        }
+        @keyframes slideIn {
+            from { transform: translateY(-50px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .transaction-item { 
+            display: flex; 
+            align-items: center; 
+            justify-content: space-between; 
+            padding: 1rem; 
+            border-bottom: 1px solid #e2e8f0; 
+            transition: all 0.3s; 
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateX(-20px); }
+            to { opacity: 1; transform: translateX(0); }
+        }
+        .transaction-item:hover { 
+            background: #f7fafc; 
+            transform: translateX(5px); 
+        }
+        .progress-bar { 
+            width: 100%; 
+            height: 8px; 
+            background: #e2e8f0; 
+            border-radius: 4px; 
+            overflow: hidden; 
+        }
+        .progress-fill { 
+            height: 100%; 
+            transition: width 0.5s ease; 
+        }
+        .progress-fill.good { 
+            background: #48bb78; 
+        }
+        .progress-fill.warning { 
+            background: #ed8936; 
+        }
+        .progress-fill.danger { 
+            background: #f56565; 
+        }
+        .toast { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            padding: 1rem 1.5rem; 
+            background: white; 
+            border-radius: 0.5rem; 
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.2); 
+            z-index: 1100; 
+            animation: slideInRight 0.3s;
+            border-left: 4px solid #48bb78;
+        }
+        .toast.error {
+            border-left-color: #f56565;
+        }
+        .toast.warning {
+            border-left-color: #ed8936;
+        }
+        @keyframes slideInRight { 
+            from { transform: translateX(100%); } 
+            to { transform: translateX(0); } 
+        }
+        .income-input {
+            background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+            color: white;
+        }
+        .income-input::placeholder {
+            color: rgba(255, 255, 255, 0.7);
+        }
+        .stat-card {
+            transition: all 0.3s ease;
+        }
+        .stat-card:hover {
+            transform: scale(1.02);
+        }
+        .limit-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+        .limit-exceeded {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script src="https://unpkg.com/react@18.2.0/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script type="text/babel">
+        // ==================== Constants with Default Limits ====================
+        const DEFAULT_CATEGORIES = [
+            { id: 'food', name: 'Food & Dining', color: '#FF6B6B', icon: '🍔', defaultLimit: 5000 },
+            { id: 'transport', name: 'Transportation', color: '#4ECDC4', icon: '🚗', defaultLimit: 3000 },
+            { id: 'shopping', name: 'Shopping', color: '#45B7D1', icon: '🛍️', defaultLimit: 5000 },
+            { id: 'entertainment', name: 'Entertainment', color: '#96CEB4', icon: '🎮', defaultLimit: 2000 },
+            { id: 'bills', name: 'Bills & Utilities', color: '#FFEAA7', icon: '📃', defaultLimit: 8000 },
+            { id: 'health', name: 'Healthcare', color: '#D4A5A5', icon: '💊', defaultLimit: 3000 },
+            { id: 'education', name: 'Education', color: '#9B59B6', icon: '📚', defaultLimit: 5000 },
+            { id: 'rent', name: 'Rent / EMI', color: '#F39C12', icon: '🏠', defaultLimit: 15000 },
+            { id: 'investment', name: 'Investments', color: '#2ECC71', icon: '📈', defaultLimit: 0 },
+            { id: 'salary', name: 'Salary', color: '#2ECC71', icon: '💰', defaultLimit: 0 },
+            { id: 'other', name: 'Other', color: '#95A5A6', icon: '📦', defaultLimit: 2000 },
+        ];
+
+        // ==================== Utility Functions for INR ====================
+        const formatINR = (amount) => {
+            return new Intl.NumberFormat('en-IN', {
+                style: 'currency',
+                currency: 'INR',
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+            }).format(amount);
+        };
+
+        const formatDate = (date) => {
+            return new Date(date).toLocaleDateString('en-IN', { 
+                day: 'numeric', 
+                month: 'short', 
+                year: 'numeric' 
+            });
+        };
+
+        // ==================== Store with Limits ====================
+        const store = {
+            transactions: JSON.parse(localStorage.getItem('transactions')) || [],
+            totalIncome: parseFloat(localStorage.getItem('totalIncome')) || 0,
+            categoryLimits: JSON.parse(localStorage.getItem('categoryLimits')) || {},
+            listeners: new Set(),
+            
+            getState() { 
+                return { 
+                    transactions: this.transactions,
+                    totalIncome: this.totalIncome,
+                    categoryLimits: this.categoryLimits
+                }; 
+            },
+            
+            subscribe(listener) {
+                this.listeners.add(listener);
+                return () => this.listeners.delete(listener);
+            },
+            
+            setTotalIncome(amount) {
+                this.totalIncome = amount;
+                localStorage.setItem('totalIncome', amount.toString());
+                this.listeners.forEach(fn => fn());
+            },
+            
+            setCategoryLimit(categoryId, limit) {
+                this.categoryLimits[categoryId] = limit;
+                localStorage.setItem('categoryLimits', JSON.stringify(this.categoryLimits));
+                this.listeners.forEach(fn => fn());
+            },
+            
+            resetAllLimits() {
+                this.categoryLimits = {};
+                localStorage.setItem('categoryLimits', JSON.stringify({}));
+                this.listeners.forEach(fn => fn());
+            },
+            
+            addTransaction(transaction) {
+                this.transactions = [{ ...transaction, id: Date.now() }, ...this.transactions];
+                localStorage.setItem('transactions', JSON.stringify(this.transactions));
+                this.listeners.forEach(fn => fn());
+            },
+            
+            deleteTransaction(id) {
+                this.transactions = this.transactions.filter(t => t.id !== id);
+                localStorage.setItem('transactions', JSON.stringify(this.transactions));
+                this.listeners.forEach(fn => fn());
+            },
+            
+            updateTransaction(id, updates) {
+                this.transactions = this.transactions.map(t => 
+                    t.id === id ? { ...t, ...updates } : t
+                );
+                localStorage.setItem('transactions', JSON.stringify(this.transactions));
+                this.listeners.forEach(fn => fn());
+            }
+        };
+
+        // ==================== Main App Component ====================
+        function App() {
+            const [state, setState] = React.useState(store.getState());
+            const [showForm, setShowForm] = React.useState(false);
+            const [showLimitForm, setShowLimitForm] = React.useState(false);
+            const [editingTransaction, setEditingTransaction] = React.useState(null);
+            const [editingLimit, setEditingLimit] = React.useState(null);
+            const [toast, setToast] = React.useState(null);
+            const [showIncomeModal, setShowIncomeModal] = React.useState(false);
+            const [newIncome, setNewIncome] = React.useState('');
+            const [selectedMonth, setSelectedMonth] = React.useState(new Date().toISOString().slice(0, 7));
+
+            React.useEffect(() => {
+                return store.subscribe(() => setState(store.getState()));
+            }, []);
+
+            const showToast = (message, type = 'success') => {
+                setToast({ message, type });
+                setTimeout(() => setToast(null), 3000);
+            };
+
+            // Calculate statistics
+            const totalExpense = state.transactions
+                .filter(t => t.type === 'expense')
+                .reduce((sum, t) => sum + t.amount, 0);
+            
+            const remainingIncome = state.totalIncome - totalExpense;
+
+            // Get current month expenses
+            const monthlyExpense = state.transactions
+                .filter(t => t.type === 'expense' && t.date?.startsWith(selectedMonth))
+                .reduce((sum, t) => sum + t.amount, 0);
+
+            // Category breakdown for selected month
+            const categoryData = {};
+            const categoryExceeded = {};
+            
+            state.transactions
+                .filter(t => t.type === 'expense' && t.date?.startsWith(selectedMonth))
+                .forEach(t => {
+                    categoryData[t.category] = (categoryData[t.category] || 0) + t.amount;
+                });
+
+            // Check which categories exceeded limits
+            Object.keys(categoryData).forEach(catId => {
+                const limit = state.categoryLimits[catId] || DEFAULT_CATEGORIES.find(c => c.id === catId)?.defaultLimit || 0;
+                if (limit > 0 && categoryData[catId] > limit) {
+                    categoryExceeded[catId] = true;
+                }
+            });
+
+            const hasExceededLimits = Object.keys(categoryExceeded).length > 0;
+
+            const handleSetLimit = (categoryId, limit) => {
+                store.setCategoryLimit(categoryId, limit);
+                showToast(`Limit set for ${DEFAULT_CATEGORIES.find(c => c.id === categoryId)?.name}`, 'success');
+            };
+
+            return (
+                <div className="container mx-auto p-4 max-w-7xl">
+                    {/* Header */}
+                    <div className="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                        <div>
+                            <h1 className="text-3xl md:text-4xl font-bold text-white">
+                                Expense Tracker 🇮🇳
+                            </h1>
+                            <p className="text-white/80 mt-2">Track expenses with category limits</p>
+                        </div>
+                        <div className="flex flex-wrap gap-3 justify-center">
+                            <button 
+                                onClick={() => setShowIncomeModal(true)} 
+                                className="btn bg-green-500 text-white hover:bg-green-600 flex items-center gap-2"
+                            >
+                                <span>💰</span> Set Income
+                            </button>
+                            <button 
+                                onClick={() => setShowLimitForm(true)} 
+                                className="btn bg-purple-500 text-white hover:bg-purple-600 flex items-center gap-2"
+                            >
+                                <span>🎯</span> Set Limits
+                            </button>
+                            <button 
+                                onClick={() => setShowForm(true)} 
+                                className="btn btn-primary flex items-center gap-2"
+                            >
+                                <span>➕</span> Add Expense
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Month Selector */}
+                    <div className="flex justify-end mb-4">
+                        <select 
+                            value={selectedMonth}
+                            onChange={(e) => setSelectedMonth(e.target.value)}
+                            className="px-4 py-2 rounded-lg border-2 focus:ring-2 focus:ring-blue-500"
+                        >
+                            {[...Array(12)].map((_, i) => {
+                                const date = new Date();
+                                date.setMonth(date.getMonth() - i);
+                                const value = date.toISOString().slice(0, 7);
+                                const label = date.toLocaleString('default', { month: 'long', year: 'numeric' });
+                                return (
+                                    <option key={value} value={value}>
+                                        {label}
+                                    </option>
+                                );
+                            })}
+                        </select>
+                    </div>
+
+                    {/* Alert Banner for Exceeded Limits */}
+                    {hasExceededLimits && (
+                        <div className="mb-4 p-4 bg-red-100 border-l-4 border-red-500 rounded-lg animate-pulse">
+                            <div className="flex items-center">
+                                <span className="text-2xl mr-3">⚠️</span>
+                                <div>
+                                    <p className="font-bold text-red-700">Budget Limits Exceeded!</p>
+                                    <p className="text-red-600">
+                                        {Object.keys(categoryExceeded).map(catId => 
+                                            DEFAULT_CATEGORIES.find(c => c.id === catId)?.name
+                                        ).join(', ')} {Object.keys(categoryExceeded).length === 1 ? 'has' : 'have'} exceeded their limits.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Income and Expense Summary Cards */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                        {/* Total Income Card */}
+                        <div className="card income-input stat-card">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm opacity-90">Total Income</p>
+                                    <p className="text-3xl font-bold mt-2">{formatINR(state.totalIncome)}</p>
+                                    <p className="text-xs opacity-75 mt-1">Set your income</p>
+                                </div>
+                                <div className="text-4xl opacity-80">💰</div>
+                            </div>
+                        </div>
+
+                        {/* Total Expenses Card */}
+                        <div className="card bg-gradient-to-r from-red-500 to-red-600 text-white stat-card">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm opacity-90">Total Expenses</p>
+                                    <p className="text-3xl font-bold mt-2">{formatINR(totalExpense)}</p>
+                                    <p className="text-xs opacity-75 mt-1">All time expenses</p>
+                                </div>
+                                <div className="text-4xl opacity-80">💸</div>
+                            </div>
+                        </div>
+
+                        {/* Remaining Income Card */}
+                        <div className={`card stat-card ${remainingIncome >= 0 ? 'bg-gradient-to-r from-blue-500 to-blue-600' : 'bg-gradient-to-r from-orange-500 to-orange-600'} text-white`}>
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm opacity-90">Remaining Income</p>
+                                    <p className="text-3xl font-bold mt-2">{formatINR(remainingIncome)}</p>
+                                    <p className="text-xs opacity-75 mt-1">
+                                        {remainingIncome >= 0 ? 'You can still spend' : 'Over budget!'}
+                                    </p>
+                                </div>
+                                <div className="text-4xl opacity-80">{remainingIncome >= 0 ? '✅' : '⚠️'}</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Monthly Stats */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                        <div className="card bg-gradient-to-r from-purple-500 to-purple-600 text-white">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm opacity-90">Monthly Expenses</p>
+                                    <p className="text-2xl font-bold mt-2">{formatINR(monthlyExpense)}</p>
+                                    <p className="text-xs opacity-75 mt-1">
+                                        {new Date(selectedMonth).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                    </p>
+                                </div>
+                                <div className="text-4xl opacity-80">📊</div>
+                            </div>
+                        </div>
+
+                        {/* Savings Rate Card */}
+                        <div className="card bg-gradient-to-r from-pink-500 to-pink-600 text-white">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm opacity-90">Savings Rate</p>
+                                    <p className="text-2xl font-bold mt-2">
+                                        {state.totalIncome > 0 
+                                            ? `${((state.totalIncome - totalExpense) / state.totalIncome * 100).toFixed(1)}%` 
+                                            : '0%'}
+                                    </p>
+                                    <p className="text-xs opacity-75 mt-1">of total income saved</p>
+                                </div>
+                                <div className="text-4xl opacity-80">🏦</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Budget Overview with Limits */}
+                    <div className="card mb-8">
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-semibold flex items-center gap-2">
+                                <span>📋</span> Category Limits & Expenses
+                            </h2>
+                            <button
+                                onClick={() => setShowLimitForm(true)}
+                                className="btn btn-primary text-sm"
+                            >
+                                Manage Limits
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            {DEFAULT_CATEGORIES.filter(c => c.defaultLimit > 0).map(cat => {
+                                const spent = categoryData[cat.id] || 0;
+                                const limit = state.categoryLimits[cat.id] || cat.defaultLimit;
+                                const percentage = limit > 0 ? (spent / limit) * 100 : 0;
+                                const isExceeded = spent > limit;
+                                
+                                return (
+                                    <div key={cat.id} className="space-y-2">
+                                        <div className="flex justify-between items-center">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xl">{cat.icon}</span>
+                                                <span className="font-medium">{cat.name}</span>
+                                                <span className={`limit-badge ${
+                                                    isExceeded 
+                                                        ? 'bg-red-100 text-red-700' 
+                                                        : percentage >= 80 
+                                                            ? 'bg-yellow-100 text-yellow-700'
+                                                            : 'bg-green-100 text-green-700'
+                                                }`}>
+                                                    <span>🎯</span> Limit: {formatINR(limit)}
+                                                </span>
+                                                {isExceeded && (
+                                                    <span className="limit-badge bg-red-500 text-white animate-pulse">
+                                                        ⚠️ Exceeded by {formatINR(spent - limit)}
+                                                    </span>
+                                                )}
+                                                {!isExceeded && percentage >= 80 && (
+                                                    <span className="limit-badge bg-yellow-500 text-white">
+                                                        ⚠️ {percentage.toFixed(0)}% used
+                                                    </span>
+                                                )}
+                                            </div>
+                                            <span className="font-medium">
+                                                {formatINR(spent)} / {formatINR(limit)}
+                                            </span>
+                                        </div>
+                                        <div className="progress-bar">
+                                            <div 
+                                                className={`progress-fill ${isExceeded ? 'danger' : percentage >= 80 ? 'warning' : 'good'}`}
+                                                style={{ width: `${Math.min(percentage, 100)}%` }}
+                                            />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+
+                    {/* Recent Expenses */}
+                    <div className="card">
+                        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
+                            <span>📝</span> Recent Expenses
+                        </h2>
+                        {state.transactions.length === 0 ? (
+                            <div className="text-center py-12">
+                                <p className="text-gray-500 text-lg mb-2">No expenses yet</p>
+                                <p className="text-gray-400">Click "Add Expense" to get started</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-2">
+                                {state.transactions.map(t => {
+                                    const cat = DEFAULT_CATEGORIES.find(c => c.id === t.category);
+                                    const limit = state.categoryLimits[t.category] || cat?.defaultLimit || 0;
+                                    const categoryTotal = categoryData[t.category] || 0;
+                                    const isCategoryExceeded = categoryTotal > limit;
+                                    
+                                    return (
+                                        <div key={t.id} className={`transaction-item ${isCategoryExceeded ? 'bg-red-50' : ''}`}>
+                                            <div className="flex items-center gap-3">
+                                                <div 
+                                                    className="w-10 h-10 rounded-full flex items-center justify-center text-white text-lg"
+                                                    style={{ backgroundColor: cat?.color }}
+                                                >
+                                                    {cat?.icon}
+                                                </div>
+                                                <div>
+                                                    <p className="font-medium">{t.description}</p>
+                                                    <p className="text-sm text-gray-500">
+                                                        {cat?.name} • {formatDate(t.date)}
+                                                        {isCategoryExceeded && (
+                                                            <span className="ml-2 text-red-500 font-medium">
+                                                                ⚠️ Over Limit
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-4">
+                                                <span className="font-semibold text-red-600">
+                                                    -{formatINR(t.amount)}
+                                                </span>
+                                                <button 
+                                                    onClick={() => {
+                                                        setEditingTransaction(t);
+                                                        setShowForm(true);
+                                                    }}
+                                                    className="text-gray-600 hover:text-blue-600 transition-colors"
+                                                >
+                                                    ✏️
+                                                </button>
+                                                <button 
+                                                    onClick={() => {
+                                                        store.deleteTransaction(t.id);
+                                                        showToast('Expense deleted!');
+                                                    }}
+                                                    className="text-gray-600 hover:text-red-600 transition-colors"
+                                                >
+                                                    🗑️
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Add/Edit Expense Modal */}
+                    {showForm && (
+                        <ExpenseForm 
+                            transaction={editingTransaction}
+                            categoryLimits={state.categoryLimits}
+                            onClose={() => {
+                                setShowForm(false);
+                                setEditingTransaction(null);
+                            }}
+                            onSave={() => {
+                                showToast(editingTransaction ? 'Expense updated!' : 'Expense added!');
+                                setShowForm(false);
+                                setEditingTransaction(null);
+                            }}
+                        />
+                    )}
+
+                    {/* Set Limits Modal */}
+                    {showLimitForm && (
+                        <LimitForm 
+                            categoryLimits={state.categoryLimits}
+                            onClose={() => setShowLimitForm(false)}
+                            onSetLimit={handleSetLimit}
+                            onResetAll={() => {
+                                store.resetAllLimits();
+                                showToast('All limits reset to defaults!');
+                                setShowLimitForm(false);
+                            }}
+                        />
+                    )}
+
+                    {/* Set Income Modal */}
+                    {showIncomeModal && (
+                        <div className="modal">
+                            <div className="modal-content">
+                                <h2 className="text-2xl font-bold mb-4">Set Total Income</h2>
+                                <p className="text-gray-600 mb-4">Enter your total income amount in ₹</p>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium mb-2">Income Amount (₹)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-3 text-gray-500">₹</span>
+                                            <input
+                                                type="number"
+                                                value={newIncome}
+                                                onChange={(e) => setNewIncome(e.target.value)}
+                                                className="w-full p-3 pl-8 border-2 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                                                placeholder="50000"
+                                                min="0"
+                                                step="1000"
+                                                autoFocus
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-3 pt-4">
+                                        <button 
+                                            onClick={() => {
+                                                if (newIncome && !isNaN(newIncome) && parseFloat(newIncome) > 0) {
+                                                    store.setTotalIncome(parseFloat(newIncome));
+                                                    setShowIncomeModal(false);
+                                                    setNewIncome('');
+                                                    showToast('Total income updated successfully!');
+                                                }
+                                            }}
+                                            className="btn bg-green-500 text-white hover:bg-green-600 flex-1 py-3"
+                                        >
+                                            Save Income
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                setShowIncomeModal(false);
+                                                setNewIncome('');
+                                            }}
+                                            className="btn bg-gray-200 hover:bg-gray-300 flex-1 py-3"
+                                        >
+                                            Cancel
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Toast Notification */}
+                    {toast && (
+                        <div className={`toast ${toast.type === 'error' ? 'error' : toast.type === 'warning' ? 'warning' : ''}`}>
+                            {toast.type === 'success' ? '✅' : toast.type === 'warning' ? '⚠️' : '❌'} {toast.message}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ==================== Expense Form Component ====================
+        function ExpenseForm({ transaction, categoryLimits, onClose, onSave }) {
+            const [formData, setFormData] = React.useState(transaction || {
+                amount: '',
+                category: '',
+                description: '',
+                date: new Date().toISOString().split('T')[0],
+                type: 'expense'
+            });
+            const [errors, setErrors] = React.useState({});
+            const [warning, setWarning] = React.useState('');
+
+            // Calculate category total to check limit
+            const calculateCategoryTotal = (categoryId) => {
+                const transactions = store.getState().transactions;
+                const currentMonth = formData.date?.slice(0, 7) || new Date().toISOString().slice(0, 7);
+                return transactions
+                    .filter(t => t.category === categoryId && t.date?.startsWith(currentMonth) && t.id !== transaction?.id)
+                    .reduce((sum, t) => sum + t.amount, 0);
+            };
+
+            const handleCategoryChange = (categoryId) => {
+                setFormData({...formData, category: categoryId});
+                
+                // Check limit warning
+                const categoryTotal = calculateCategoryTotal(categoryId);
+                const newAmount = parseFloat(formData.amount) || 0;
+                const limit = categoryLimits[categoryId] || DEFAULT_CATEGORIES.find(c => c.id === categoryId)?.defaultLimit || 0;
+                
+                if (limit > 0 && categoryTotal + newAmount > limit) {
+                    setWarning(`Warning: This will exceed the category limit of ${formatINR(limit)} by ${formatINR(categoryTotal + newAmount - limit)}`);
+                } else {
+                    setWarning('');
+                }
+            };
+
+            const handleAmountChange = (e) => {
+                const amount = e.target.value;
+                setFormData({...formData, amount});
+                
+                // Check limit warning
+                if (formData.category) {
+                    const categoryTotal = calculateCategoryTotal(formData.category);
+                    const newAmount = parseFloat(amount) || 0;
+                    const limit = categoryLimits[formData.category] || DEFAULT_CATEGORIES.find(c => c.id === formData.category)?.defaultLimit || 0;
+                    
+                    if (limit > 0 && categoryTotal + newAmount > limit) {
+                        setWarning(`Warning: This will exceed the category limit of ${formatINR(limit)} by ${formatINR(categoryTotal + newAmount - limit)}`);
+                    } else {
+                        setWarning('');
+                    }
+                }
+            };
+
+            const validate = () => {
+                const newErrors = {};
+                if (!formData.amount || formData.amount <= 0) {
+                    newErrors.amount = 'Amount must be positive';
+                } else if (formData.amount > 10000000) {
+                    newErrors.amount = 'Amount cannot exceed ₹1 Crore';
+                }
+                
+                if (!formData.category) newErrors.category = 'Please select a category';
+                
+                if (!formData.description || formData.description.length < 3) {
+                    newErrors.description = 'Description must be at least 3 characters';
+                } else if (formData.description.length > 100) {
+                    newErrors.description = 'Description too long';
+                }
+                
+                if (!formData.date) newErrors.date = 'Date is required';
+                else {
+                    const selectedDate = new Date(formData.date);
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    if (selectedDate > today) {
+                        newErrors.date = 'Future dates are not allowed';
+                    }
+                }
+                
+                return newErrors;
+            };
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const newErrors = validate();
+                if (Object.keys(newErrors).length === 0) {
+                    const data = { 
+                        ...formData, 
+                        amount: parseFloat(formData.amount),
+                        type: 'expense' 
+                    };
+                    
+                    // Check if limit will be exceeded
+                    const categoryTotal = calculateCategoryTotal(formData.category);
+                    const limit = categoryLimits[formData.category] || DEFAULT_CATEGORIES.find(c => c.id === formData.category)?.defaultLimit || 0;
+                    
+                    if (limit > 0 && categoryTotal + data.amount > limit) {
+                        if (!window.confirm(`This expense will exceed the category limit by ${formatINR(categoryTotal + data.amount - limit)}. Are you sure you want to continue?`)) {
+                            return;
+                        }
+                    }
+                    
+                    if (transaction) {
+                        store.updateTransaction(transaction.id, data);
+                    } else {
+                        store.addTransaction(data);
+                    }
+                    onSave();
+                } else {
+                    setErrors(newErrors);
+                }
+            };
+
+            return (
+                <div className="modal">
+                    <div className="modal-content">
+                        <h2 className="text-2xl font-bold mb-4">
+                            {transaction ? 'Edit' : 'Add'} Expense
+                        </h2>
+                        {warning && (
+                            <div className="mb-4 p-3 bg-yellow-100 border-l-4 border-yellow-500 rounded">
+                                <p className="text-yellow-700 text-sm">{warning}</p>
+                            </div>
+                        )}
+                        <form onSubmit={handleSubmit} className="space-y-4">
+                            {/* Amount Input - INR */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2">
+                                    Amount (₹)
+                                </label>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-3 text-gray-500">₹</span>
+                                    <input
+                                        type="number"
+                                        step="1"
+                                        value={formData.amount}
+                                        onChange={handleAmountChange}
+                                        className={`w-full p-3 pl-8 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                            errors.amount ? 'border-red-500' : ''
+                                        }`}
+                                        placeholder="1000"
+                                    />
+                                </div>
+                                {errors.amount && (
+                                    <p className="text-red-500 text-sm mt-1">{errors.amount}</p>
+                                )}
+                            </div>
+
+                            {/* Category Select */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2">
+                                    Category
+                                </label>
+                                <select
+                                    value={formData.category}
+                                    onChange={(e) => handleCategoryChange(e.target.value)}
+                                    className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                        errors.category ? 'border-red-500' : ''
+                                    }`}
+                                >
+                                    <option value="">Select a category</option>
+                                    {DEFAULT_CATEGORIES.filter(c => c.id !== 'salary' && c.id !== 'investment').map(c => {
+                                        const limit = categoryLimits[c.id] || c.defaultLimit;
+                                        return (
+                                            <option key={c.id} value={c.id}>
+                                                {c.icon} {c.name} (Limit: {formatINR(limit)})
+                                            </option>
+                                        );
+                                    })}
+                                </select>
+                                {errors.category && (
+                                    <p className="text-red-500 text-sm mt-1">{errors.category}</p>
+                                )}
+                            </div>
+
+                            {/* Description Input */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2">
+                                    Description
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.description}
+                                    onChange={e => setFormData({...formData, description: e.target.value})}
+                                    className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                        errors.description ? 'border-red-500' : ''
+                                    }`}
+                                    placeholder="e.g., Grocery shopping at Big Bazaar"
+                                />
+                                {errors.description && (
+                                    <p className="text-red-500 text-sm mt-1">{errors.description}</p>
+                                )}
+                            </div>
+
+                            {/* Date Input */}
+                            <div>
+                                <label className="block text-sm font-medium mb-2">
+                                    Date
+                                </label>
+                                <input
+                                    type="date"
+                                    value={formData.date}
+                                    onChange={e => setFormData({...formData, date: e.target.value})}
+                                    className={`w-full p-3 border-2 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+                                        errors.date ? 'border-red-500' : ''
+                                    }`}
+                                />
+                                {errors.date && (
+                                    <p className="text-red-500 text-sm mt-1">{errors.date}</p>
+                                )}
+                            </div>
+
+                            {/* Form Buttons */}
+                            <div className="flex gap-3 pt-4">
+                                <button 
+                                    type="submit" 
+                                    className="btn bg-blue-600 text-white hover:bg-blue-700 flex-1 py-3"
+                                >
+                                    {transaction ? 'Update' : 'Add'} Expense
+                                </button>
+                                <button 
+                                    type="button" 
+                                    onClick={onClose} 
+                                    className="btn bg-gray-200 hover:bg-gray-300 flex-1 py-3"
+                                >
+                                    Cancel
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== Limit Form Component ====================
+        function LimitForm({ categoryLimits, onClose, onSetLimit, onResetAll }) {
+            const [limits, setLimits] = React.useState({});
+
+            const handleLimitChange = (categoryId, value) => {
+                setLimits(prev => ({ ...prev, [categoryId]: value }));
+            };
+
+            const handleSaveAll = () => {
+                Object.entries(limits).forEach(([categoryId, limit]) => {
+                    if (limit && !isNaN(limit) && parseFloat(limit) > 0) {
+                        onSetLimit(categoryId, parseFloat(limit));
+                    }
+                });
+                onClose();
+            };
+
+            return (
+                <div className="modal">
+                    <div className="modal-content max-w-2xl">
+                        <h2 className="text-2xl font-bold mb-4">Set Category Limits</h2>
+                        <p className="text-gray-600 mb-4">Set monthly spending limits for each category</p>
+                        
+                        <div className="space-y-4 max-h-96 overflow-y-auto mb-4">
+                            {DEFAULT_CATEGORIES.filter(c => c.defaultLimit > 0).map(cat => (
+                                <div key={cat.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-lg">
+                                    <div 
+                                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-lg"
+                                        style={{ backgroundColor: cat.color }}
+                                    >
+                                        {cat.icon}
+                                    </div>
+                                    <div className="flex-1">
+                                        <label className="block text-sm font-medium mb-1">
+                                            {cat.name}
+                                        </label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-2 text-gray-500">₹</span>
+                                            <input
+                                                type="number"
+                                                defaultValue={categoryLimits[cat.id] || cat.defaultLimit}
+                                                onChange={(e) => handleLimitChange(cat.id, e.target.value)}
+                                                className="w-full p-2 pl-8 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                                                placeholder="Enter limit"
+                                                min="0"
+                                                step="100"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="text-sm text-gray-500">
+                                        Current: {formatINR(categoryLimits[cat.id] || cat.defaultLimit)}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+
+                        <div className="flex gap-3">
+                            <button 
+                                onClick={handleSaveAll}
+                                className="btn bg-green-500 text-white hover:bg-green-600 flex-1 py-3"
+                            >
+                                Save All Limits
+                            </button>
+                            <button 
+                                onClick={onResetAll}
+                                className="btn bg-yellow-500 text-white hover:bg-yellow-600 flex-1 py-3"
+                            >
+                                Reset to Defaults
+                            </button>
+                            <button 
+                                onClick={onClose}
+                                className="btn bg-gray-200 hover:bg-gray-300 flex-1 py-3"
+                            >
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ==================== Render App ====================
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>

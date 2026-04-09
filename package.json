@@ -1,0 +1,16 @@
+{
+  "name": "expense-tracker",
+  "version": "1.0.0",
+  "description": "Personal Finance Dashboard with 500+ transactions, 6+ charts, and budget tracking",
+  "main": "app.js",
+  "scripts": {
+    "start": "npx http-server -p 3000",
+    "dev": "npx http-server -p 3000"
+  },
+  "keywords": ["expense-tracker", "finance", "dashboard", "react", "zustand"],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
